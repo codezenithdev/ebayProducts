@@ -16,3 +16,9 @@ export type SearchResponse = {
 export type SearchError = {
   error: string
 }
+
+export type SearchFilters = {
+  minPrice?: number
+  maxPrice?: number
+  condition?: string  // empty string means "all conditions"
+}

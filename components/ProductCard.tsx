@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Image from 'next/image'
 import type { EbayItem } from '@/types/ebay'
 
@@ -18,17 +19,19 @@ function conditionBadgeClass(condition: string): string {
 
 export function ProductCard({ item }: ProductCardProps) {
   const priceUnavailable = item.price === 'N/A'
+  const [imageError, setImageError] = useState(false)
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-zinc-800 bg-[#18181b] shadow-black/20 transition duration-200 ease-out hover:-translate-y-1 hover:shadow-lg hover:shadow-black/50">
       <div className="relative aspect-square w-full overflow-hidden bg-zinc-900">
-        {item.imageUrl !== '' ? (
+        {item.imageUrl !== '' && !imageError ? (
           <Image
             src={item.imageUrl}
-            alt=""
+            alt={`${item.title}`}
             fill
             className="object-contain p-2 transition duration-200 group-hover:scale-[1.02]"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            onError={() => setImageError(true)}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-zinc-900 text-zinc-600">

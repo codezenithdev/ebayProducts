@@ -43,7 +43,6 @@ export function SearchBar({
 
   const handleChange = (next: string) => {
     setValue(next)
-    scheduleDebouncedSearch(next)
   }
 
   const submitNow = () => {

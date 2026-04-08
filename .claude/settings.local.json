@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(curl -s \"http://localhost:3000/api/search?q=apple\")",
+      "Bash(curl -s \"http://localhost:3000/api/search?q=apple&page=2\")",
+      "Bash(curl -s \"http://localhost:3000/api/search?q=apple&maxPrice=300\")",
+      "Bash(curl -s \"http://localhost:3000/api/search?q=apple&condition=New\")",
+      "Bash(curl -s \"http://localhost:3000/api/search?q=apple&minPrice=50&maxPrice=300&condition=Used\")",
+      "Bash(pkill -f \"next dev\")"
+    ]
+  }
+}
