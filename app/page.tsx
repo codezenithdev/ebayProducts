@@ -12,6 +12,25 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 
 type PageStatus = 'idle' | 'loading' | 'results' | 'empty' | 'error'
 
+type Filters = {
+  minPrice: string
+  maxPrice: string
+  condition: string
+}
+
+function buildSearchParams(
+  query: string,
+  page: number,
+  filters: Filters
+): URLSearchParams {
+  const params = new URLSearchParams({ q: query })
+  if (page > 1) params.set('page', String(page))
+  if (filters.minPrice) params.set('minPrice', filters.minPrice)
+  if (filters.maxPrice) params.set('maxPrice', filters.maxPrice)
+  if (filters.condition) params.set('condition', filters.condition)
+  return params
+}
+
 function SearchPageContent() {
   const router = useRouter()
   const pathname = usePathname()
@@ -20,7 +39,7 @@ function SearchPageContent() {
   const [status, setStatus] = useState<PageStatus>('idle')
   const [errorMessage, setErrorMessage] = useState('')
   const [currentQuery, setCurrentQuery] = useState('')
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<Filters>({
     minPrice: '',
     maxPrice: '',
     condition: '',
@@ -29,13 +48,18 @@ function SearchPageContent() {
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
   const initialLoadDone = useRef(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
 
   const handleSearch = useCallback(
     async (
       query: string,
-      opts?: { page?: number; filters?: typeof filters }
+      opts?: { page?: number; filters?: Filters }
     ) => {
+      // Cancel previous fetch if in progress
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = new AbortController()
+
       if (query.trim() === '') {
         setItems([])
         setStatus('idle')
@@ -48,24 +72,43 @@ function SearchPageContent() {
         return
       }
 
+      const targetPage = opts?.page ?? 1
+      const targetFilters = opts?.filters ?? filters
+
       // Handle "view all" request
       if (query === '*') {
         setStatus('loading')
         setErrorMessage('')
         setCurrentQuery('all products')
-        setPage(1)
+        setPage(targetPage)
+        setFilters(targetFilters)
 
         // Simulate network delay
         await new Promise((resolve) => setTimeout(resolve, 600))
-        setItems(mockItems)
-        setTotal(mockItems.length)
+
+        // Apply filters to all products
+        let filtered = mockItems
+        if (targetFilters.minPrice) {
+          const minPrice = parseFloat(targetFilters.minPrice)
+          filtered = filtered.filter((item) => parseFloat(item.price) >= minPrice)
+        }
+        if (targetFilters.maxPrice) {
+          const maxPrice = parseFloat(targetFilters.maxPrice)
+          filtered = filtered.filter((item) => parseFloat(item.price) <= maxPrice)
+        }
+        if (targetFilters.condition && targetFilters.condition !== '') {
+          const condLower = targetFilters.condition.toLowerCase()
+          filtered = filtered.filter(
+            (item) => item.condition.toLowerCase() === condLower
+          )
+        }
+
+        setItems(filtered)
+        setTotal(filtered.length)
         setTotalPages(1)
-        setStatus('results')
+        setStatus(filtered.length === 0 ? 'empty' : 'results')
         return
       }
-
-      const targetPage = opts?.page ?? 1
-      const targetFilters = opts?.filters ?? filters
 
       setStatus('loading')
       setErrorMessage('')
@@ -73,34 +116,19 @@ function SearchPageContent() {
       setPage(targetPage)
       setFilters(targetFilters)
 
-      // URL sync with all params
-      const urlParams = new URLSearchParams({ q: query.trim() })
-      if (targetPage > 1) urlParams.set('page', String(targetPage))
-      if (targetFilters.minPrice) urlParams.set('minPrice', targetFilters.minPrice)
-      if (targetFilters.maxPrice) urlParams.set('maxPrice', targetFilters.maxPrice)
-      if (targetFilters.condition) urlParams.set('condition', targetFilters.condition)
-      router.replace(`${pathname}?${urlParams.toString()}`)
-
-      // Fetch with all params
-      const fetchParams = new URLSearchParams({ q: query.trim() })
-      if (targetPage > 1) fetchParams.set('page', String(targetPage))
-      if (targetFilters.minPrice) fetchParams.set('minPrice', targetFilters.minPrice)
-      if (targetFilters.maxPrice) fetchParams.set('maxPrice', targetFilters.maxPrice)
-      if (targetFilters.condition) fetchParams.set('condition', targetFilters.condition)
+      // Build search params once and use for both URL and fetch
+      const searchParams = buildSearchParams(query.trim(), targetPage, targetFilters)
+      router.replace(`${pathname}?${searchParams.toString()}`)
 
       try {
-        const res = await fetch(`/api/search?${fetchParams.toString()}`)
+        const res = await fetch(`/api/search?${searchParams.toString()}`, {
+          signal: abortControllerRef.current.signal,
+        })
         const data: unknown = await res.json()
 
         if (!res.ok) {
-          const err =
-            typeof data === 'object' &&
-            data !== null &&
-            'error' in data &&
-            typeof (data as { error: unknown }).error === 'string'
-              ? (data as { error: string }).error
-              : 'Something went wrong.'
-          setErrorMessage(err)
+          const error = extractErrorMessage(data)
+          setErrorMessage(error)
           setStatus('error')
           setItems([])
           return
@@ -124,7 +152,11 @@ function SearchPageContent() {
           setItems(nextItems)
           setStatus('results')
         }
-      } catch {
+      } catch (error) {
+        // Ignore abort errors (from cancellation)
+        if (error instanceof Error && error.name === 'AbortError') {
+          return
+        }
         setErrorMessage('Failed to fetch results. Please try again.')
         setStatus('error')
         setItems([])
@@ -133,11 +165,25 @@ function SearchPageContent() {
     [pathname, router, filters]
   )
 
+  function extractErrorMessage(data: unknown): string {
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      'error' in data &&
+      typeof (data as { error: unknown }).error === 'string'
+    ) {
+      return (data as { error: string }).error
+    }
+    return 'Something went wrong.'
+  }
+
   const handleFiltersChange = useCallback(
     (next: typeof filters) => {
       setFilters(next)
       if (currentQuery) {
-        void handleSearch(currentQuery, { page: 1, filters: next })
+        // Use '*' for "all products" mode so filters apply correctly
+        const queryToSearch = currentQuery === 'all products' ? '*' : currentQuery
+        void handleSearch(queryToSearch, { page: 1, filters: next })
       }
     },
     [currentQuery, handleSearch]
@@ -145,7 +191,9 @@ function SearchPageContent() {
 
   const handlePageChange = useCallback(
     (next: number) => {
-      void handleSearch(currentQuery, { page: next })
+      // Use '*' for "all products" mode
+      const queryToSearch = currentQuery === 'all products' ? '*' : currentQuery
+      void handleSearch(queryToSearch, { page: next })
     },
     [currentQuery, handleSearch]
   )

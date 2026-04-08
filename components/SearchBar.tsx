@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 type SearchBarProps = {
   onSearch: (query: string) => void
@@ -14,39 +14,16 @@ export function SearchBar({
   initialValue = '',
 }: SearchBarProps) {
   const [value, setValue] = useState(initialValue)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setValue(initialValue)
   }, [initialValue])
-
-  const clearDebounce = useCallback(() => {
-    if (debounceRef.current !== null) {
-      clearTimeout(debounceRef.current)
-      debounceRef.current = null
-    }
-  }, [])
-
-  const scheduleDebouncedSearch = useCallback(
-    (next: string) => {
-      clearDebounce()
-      debounceRef.current = setTimeout(() => {
-        onSearch(next.trim())
-      }, 300)
-    },
-    [clearDebounce, onSearch]
-  )
-
-  useEffect(() => {
-    return () => clearDebounce()
-  }, [clearDebounce])
 
   const handleChange = (next: string) => {
     setValue(next)
   }
 
   const submitNow = () => {
-    clearDebounce()
     onSearch(value.trim())
   }
 
@@ -56,7 +33,6 @@ export function SearchBar({
   }
 
   const handleClear = () => {
-    clearDebounce()
     setValue('')
     onSearch('')
   }

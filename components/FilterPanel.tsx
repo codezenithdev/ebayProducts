@@ -29,61 +29,54 @@ export function FilterPanel({
   onFiltersChange,
   disabled,
 }: FilterPanelProps) {
-  const priceDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const minPriceRef = useRef<HTMLInputElement>(null)
+  const maxPriceRef = useRef<HTMLInputElement>(null)
+  const conditionRef = useRef<HTMLSelectElement>(null)
 
-  const clearPriceDebounce = useCallback(() => {
-    if (priceDebounceRef.current !== null) {
-      clearTimeout(priceDebounceRef.current)
-      priceDebounceRef.current = null
-    }
-  }, [])
-
-  const schedulePriceChange = useCallback(
-    (nextMin: string, nextMax: string) => {
-      clearPriceDebounce()
-      priceDebounceRef.current = setTimeout(() => {
-        onFiltersChange({ minPrice: nextMin, maxPrice: nextMax, condition })
-      }, 400)
+  const handleSubmit = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault()
+      const nextMin = minPriceRef.current?.value ?? ''
+      const nextMax = maxPriceRef.current?.value ?? ''
+      const nextCondition = conditionRef.current?.value ?? ''
+      onFiltersChange({
+        minPrice: nextMin,
+        maxPrice: nextMax,
+        condition: nextCondition,
+      })
     },
-    [clearPriceDebounce, condition, onFiltersChange]
-  )
-
-  const handleConditionChange = useCallback(
-    (next: string) => {
-      onFiltersChange({ minPrice, maxPrice, condition: next })
-    },
-    [minPrice, maxPrice, onFiltersChange]
+    [onFiltersChange]
   )
 
   return (
-    <div className="flex flex-wrap gap-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
+    <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
       <div className="flex items-center gap-2">
         <label className="text-sm text-zinc-400">Price:</label>
         <input
+          ref={minPriceRef}
           type="number"
           min={0}
           placeholder="Min"
           defaultValue={minPrice}
           disabled={disabled}
-          onChange={(e) => schedulePriceChange(e.target.value, maxPrice)}
           className="w-24 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-[#fafafa] placeholder:text-zinc-500 focus:border-yellow-400 focus:outline-none"
         />
         <span className="text-zinc-500">–</span>
         <input
+          ref={maxPriceRef}
           type="number"
           min={0}
           placeholder="Max"
           defaultValue={maxPrice}
           disabled={disabled}
-          onChange={(e) => schedulePriceChange(minPrice, e.target.value)}
           className="w-24 rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-[#fafafa] placeholder:text-zinc-500 focus:border-yellow-400 focus:outline-none"
         />
       </div>
       <div className="flex items-center gap-2">
         <label className="text-sm text-zinc-400">Condition:</label>
         <select
-          value={condition}
-          onChange={(e) => handleConditionChange(e.target.value)}
+          ref={conditionRef}
+          defaultValue={condition}
           disabled={disabled}
           className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-[#fafafa] focus:border-yellow-400 focus:outline-none"
         >
@@ -94,6 +87,13 @@ export function FilterPanel({
           ))}
         </select>
       </div>
-    </div>
+      <button
+        type="submit"
+        disabled={disabled}
+        className="ml-auto rounded-md bg-yellow-400 px-4 py-1 text-sm font-medium text-black hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Apply
+      </button>
+    </form>
   )
 }
