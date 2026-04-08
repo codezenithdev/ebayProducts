@@ -1,5 +1,9 @@
 let cache: { token: string; expiresAt: number } | null = null
 
+export function clearAccessTokenCache(): void {
+  cache = null
+}
+
 export async function getAccessToken(): Promise<string> {
   const clientId = process.env.EBAY_CLIENT_ID
   const clientSecret = process.env.EBAY_CLIENT_SECRET

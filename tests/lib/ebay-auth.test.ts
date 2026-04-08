@@ -1,6 +1,35 @@
 import { describe, expect, it, vi } from 'vitest'
 
 describe('getAccessToken', () => {
+  it('clears cached token when clearAccessTokenCache is called', async () => {
+    process.env.EBAY_CLIENT_ID = 'client-id'
+    process.env.EBAY_CLIENT_SECRET = 'client-secret'
+    process.env.EBAY_OAUTH_URL = 'https://example.com/oauth/token'
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'token-a', expires_in: 3600 }), {
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'token-b', expires_in: 3600 }), {
+          status: 200,
+        })
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { clearAccessTokenCache, getAccessToken } = await import('@/lib/ebay-auth')
+    const first = await getAccessToken()
+    clearAccessTokenCache()
+    const second = await getAccessToken()
+
+    expect(first).toBe('token-a')
+    expect(second).toBe('token-b')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('throws if required OAuth env vars are missing', async () => {
     delete process.env.EBAY_CLIENT_ID
     delete process.env.EBAY_CLIENT_SECRET
@@ -83,6 +112,23 @@ describe('getAccessToken', () => {
 
     await expect(getAccessToken()).rejects.toThrow(
       'eBay OAuth token request failed: HTTP 401 Unauthorized'
+    )
+  })
+
+  it('throws when oauth response payload is missing required fields', async () => {
+    process.env.EBAY_CLIENT_ID = 'client-id'
+    process.env.EBAY_CLIENT_SECRET = 'client-secret'
+    process.env.EBAY_OAUTH_URL = 'https://example.com/oauth/token'
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ token: 'bad-shape' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { getAccessToken } = await import('@/lib/ebay-auth')
+
+    await expect(getAccessToken()).rejects.toThrow(
+      'eBay OAuth response missing access_token or expires_in'
     )
   })
 })

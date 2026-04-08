@@ -43,3 +43,17 @@ describe('GET /api/search', () => {
     expect(json).toEqual({ error: 'Failed to fetch results. Please try again.' })
   })
 })
+
+describe('GET /search alias', () => {
+  it('uses the same handler contract as /api/search', async () => {
+    searchItemsMock.mockResolvedValueOnce([{ id: 'alias-1' }])
+
+    const { GET } = await import('@/app/search/route')
+    const response = await GET(new Request('http://localhost/search?q=headphones'))
+    const json = (await response.json()) as { items: Array<{ id: string }>; total: number }
+
+    expect(response.status).toBe(200)
+    expect(searchItemsMock).toHaveBeenCalledWith('headphones')
+    expect(json).toEqual({ items: [{ id: 'alias-1' }], total: 1 })
+  })
+})

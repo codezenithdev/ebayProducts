@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getAccessTokenMock = vi.fn<() => Promise<string>>()
+const clearAccessTokenCacheMock = vi.fn<() => void>()
 
 vi.mock('@/lib/ebay-auth', () => ({
   getAccessToken: getAccessTokenMock,
+  clearAccessTokenCache: clearAccessTokenCacheMock,
 }))
 
 describe('searchItems', () => {
   beforeEach(() => {
     process.env.EBAY_API_BASE = 'https://api.sandbox.ebay.com'
     getAccessTokenMock.mockResolvedValue('oauth-token')
+    clearAccessTokenCacheMock.mockReset()
   })
 
   it('maps eBay item summaries into normalized EbayItem objects', async () => {
@@ -87,5 +90,41 @@ describe('searchItems', () => {
     const { searchItems } = await import('@/lib/ebay-client')
 
     await expect(searchItems('query')).rejects.toThrow('eBay Browse API error: 503')
+  })
+
+  it('refreshes token and retries once on 401 before succeeding', async () => {
+    getAccessTokenMock
+      .mockResolvedValueOnce('stale-token')
+      .mockResolvedValueOnce('fresh-token')
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('expired', { status: 401 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            itemSummaries: [{ itemId: '1', title: 'After Retry' }],
+          }),
+          { status: 200 }
+        )
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { searchItems } = await import('@/lib/ebay-client')
+    const items = await searchItems('retry')
+
+    expect(clearAccessTokenCacheMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(items).toEqual([
+      {
+        id: '1',
+        title: 'After Retry',
+        price: 'N/A',
+        currency: 'USD',
+        condition: 'Unknown',
+        imageUrl: '',
+        itemWebUrl: '',
+      },
+    ])
   })
 })

@@ -1,5 +1,5 @@
 import type { EbayItem } from '../types/ebay'
-import { getAccessToken } from './ebay-auth'
+import { clearAccessTokenCache, getAccessToken } from './ebay-auth'
 
 type EbayBrowsePrice = {
   value?: string
@@ -44,15 +44,22 @@ export async function searchItems(
     throw new Error('Missing EBAY_API_BASE environment variable')
   }
 
-  const token = await getAccessToken()
   const url = `${base}/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=${limit}`
+  const getResponseWithToken = async (): Promise<Response> => {
+    const token = await getAccessToken()
+    return fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+  }
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
-
+  let response = await getResponseWithToken()
+  if (response.status === 401) {
+    // Token may be expired/revoked even if local cache says otherwise.
+    clearAccessTokenCache()
+    response = await getResponseWithToken()
+  }
   if (!response.ok) {
     throw new Error(`eBay Browse API error: ${response.status}`)
   }
